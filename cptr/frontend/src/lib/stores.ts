@@ -36,6 +36,7 @@ import { getPathDisplayName, isSupportedWorkspacePath } from '$lib/utils/paths';
 import {
 	applyAppearance,
 	normalizeBorderContrast,
+	normalizeTextContrast,
 	sanitizeThemeConfig,
 	type AppearancePreferences,
 	type Theme,
@@ -350,6 +351,8 @@ export const pwaPreferences = writable<PwaPreferences>(defaultPwaPreferences);
 export const themeConfig = writable<ThemeConfig | null>(null);
 export const textScale = writable<number | null>(null);
 export const borderContrast = writable<number | null>(null);
+export const textContrast = writable<number | null>(null);
+export const boldText = writable(false);
 export const widescreenMode = writable(false);
 export const expandToolDetails = writable(false);
 
@@ -447,7 +450,9 @@ function persistPreferences(): void {
 				theme: get(theme),
 				themeConfig: sanitizeThemeConfig(get(themeConfig)),
 				textScale: get(textScale),
-				borderContrast: get(borderContrast)
+				borderContrast: get(borderContrast),
+				textContrast: get(textContrast),
+				boldText: get(boldText)
 			},
 			sidebarOpen: get(sidebarOpen),
 			sidebarWidth: get(sidebarWidth),
@@ -513,6 +518,12 @@ function subscribeForPersistence() {
 	borderContrast.subscribe(() => {
 		if (get(stateLoaded)) persistPreferences();
 	});
+	textContrast.subscribe(() => {
+		if (get(stateLoaded)) persistPreferences();
+	});
+	boldText.subscribe(() => {
+		if (get(stateLoaded)) persistPreferences();
+	});
 	widescreenMode.subscribe(() => {
 		if (get(stateLoaded)) persistPreferences();
 	});
@@ -562,6 +573,8 @@ export async function loadPreferences(): Promise<void> {
 			normalizeBorderContrast(appearance.borderContrast) ??
 				(appearance.highContrastBorders === true ? 12 : null)
 		);
+		textContrast.set(normalizeTextContrast(appearance.textContrast));
+		boldText.set(appearance.boldText === true);
 		if (prefs.widescreenMode !== undefined) widescreenMode.set(prefs.widescreenMode as boolean);
 		if (prefs.expandToolDetails !== undefined)
 			expandToolDetails.set(prefs.expandToolDetails as boolean);
@@ -788,13 +801,22 @@ export const loadStateFromServer = initState;
 // ── Appearance application ──────────────────────────────────────
 
 function applyCurrentAppearance() {
-	applyAppearance(get(theme), get(themeConfig), get(textScale), get(borderContrast));
+	applyAppearance(
+		get(theme),
+		get(themeConfig),
+		get(textScale),
+		get(borderContrast),
+		get(textContrast),
+		get(boldText)
+	);
 }
 
 theme.subscribe(applyCurrentAppearance);
 themeConfig.subscribe(applyCurrentAppearance);
 textScale.subscribe(applyCurrentAppearance);
 borderContrast.subscribe(applyCurrentAppearance);
+textContrast.subscribe(applyCurrentAppearance);
+boldText.subscribe(applyCurrentAppearance);
 
 if (typeof window !== 'undefined') {
 	window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -825,6 +847,8 @@ if (typeof BroadcastChannel !== 'undefined') {
 					normalizeBorderContrast(value.borderContrast) ??
 						(value.highContrastBorders === true ? 12 : null)
 				);
+				textContrast.set(normalizeTextContrast(value.textContrast));
+				boldText.set(value.boldText === true);
 			} else if (type === 'locale' && value) {
 				changeLocale(value);
 			}
@@ -833,62 +857,32 @@ if (typeof BroadcastChannel !== 'undefined') {
 		}
 	};
 
+	const appearancePayload = () => ({
+		theme: get(theme),
+		themeConfig: get(themeConfig),
+		textScale: get(textScale),
+		borderContrast: get(borderContrast),
+		textContrast: get(textContrast),
+		boldText: get(boldText)
+	});
+
+	const broadcastAppearance = () => {
+		if (_syncingFromBroadcast) return;
+		channel.postMessage({ type: 'appearance', value: appearancePayload() });
+	};
+
 	theme.subscribe((t) => {
 		if (!_syncingFromBroadcast) {
 			channel.postMessage({ type: 'theme', value: t });
-			channel.postMessage({
-				type: 'appearance',
-				value: {
-					theme: t,
-					themeConfig: get(themeConfig),
-					textScale: get(textScale),
-					borderContrast: get(borderContrast)
-				}
-			});
+			channel.postMessage({ type: 'appearance', value: appearancePayload() });
 		}
 	});
 
-	themeConfig.subscribe((config) => {
-		if (!_syncingFromBroadcast) {
-			channel.postMessage({
-				type: 'appearance',
-				value: {
-					theme: get(theme),
-					themeConfig: config,
-					textScale: get(textScale),
-					borderContrast: get(borderContrast)
-				}
-			});
-		}
-	});
-
-	textScale.subscribe((scale) => {
-		if (!_syncingFromBroadcast) {
-			channel.postMessage({
-				type: 'appearance',
-				value: {
-					theme: get(theme),
-					themeConfig: get(themeConfig),
-					textScale: scale,
-					borderContrast: get(borderContrast)
-				}
-			});
-		}
-	});
-
-	borderContrast.subscribe((contrast) => {
-		if (!_syncingFromBroadcast) {
-			channel.postMessage({
-				type: 'appearance',
-				value: {
-					theme: get(theme),
-					themeConfig: get(themeConfig),
-					textScale: get(textScale),
-					borderContrast: contrast
-				}
-			});
-		}
-	});
+	themeConfig.subscribe(broadcastAppearance);
+	textScale.subscribe(broadcastAppearance);
+	borderContrast.subscribe(broadcastAppearance);
+	textContrast.subscribe(broadcastAppearance);
+	boldText.subscribe(broadcastAppearance);
 
 	// Locale changes are broadcast from changeLocale() calls;
 	// subscribe to i18next language changes.

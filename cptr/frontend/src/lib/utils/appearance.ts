@@ -19,6 +19,8 @@ export type AppearancePreferences = {
 	textScale?: number | null;
 	borderContrast?: number | null;
 	highContrastBorders?: boolean;
+	textContrast?: number | null;
+	boldText?: boolean;
 };
 
 type ResolvedTheme = 'dark' | 'light';
@@ -29,6 +31,16 @@ export const DEFAULT_BORDER_CONTRAST = 1.5;
 export const DEFAULT_DIVIDER_CONTRAST = 0.875;
 export const MAX_BORDER_CONTRAST = 16;
 
+/* Secondary text is drawn by mixing the foreground into the background; these
+   are the resting mixes that `--app-fg-muted` / `--app-fg-subtle` use. Text
+   contrast lerps them towards a full-strength foreground. */
+export const DEFAULT_TEXT_CONTRAST = 0;
+export const MAX_TEXT_CONTRAST = 100;
+const MUTED_TEXT_MIX = 62;
+const SUBTLE_TEXT_MIX = 48;
+const BOLD_TEXT_WEIGHT = 500;
+const DEFAULT_TEXT_WEIGHT = 400;
+
 export function normalizeBorderContrast(value: unknown): number | null {
 	if (value === null || value === undefined || value === '') return null;
 	const contrast = Number(value);
@@ -37,6 +49,18 @@ export function normalizeBorderContrast(value: unknown): number | null {
 		DEFAULT_BORDER_CONTRAST,
 		Math.min(MAX_BORDER_CONTRAST, Number(contrast.toFixed(1)))
 	);
+}
+
+export function normalizeTextContrast(value: unknown): number | null {
+	if (value === null || value === undefined || value === '') return null;
+	const contrast = Number(value);
+	if (!Number.isFinite(contrast)) return null;
+	return Math.max(DEFAULT_TEXT_CONTRAST, Math.min(MAX_TEXT_CONTRAST, Math.round(contrast)));
+}
+
+/** Lerp a resting mix towards 100% foreground as text contrast rises. */
+function textMix(base: number, contrast: number) {
+	return Number((base + ((100 - base) * contrast) / 100).toFixed(2));
 }
 
 export function resolveThemeMode(theme: Theme): ResolvedTheme {
@@ -119,13 +143,16 @@ export function applyAppearance(
 	theme: Theme,
 	config: ThemeConfig | null,
 	textScale: number | null,
-	borderContrast: number | null = null
+	borderContrast: number | null = null,
+	textContrast: number | null = null,
+	boldText = false
 ) {
 	if (typeof document === 'undefined') return;
 
 	const resolved = resolveThemeMode(theme);
 	const merged = resolveThemeConfig(theme, config);
 	const borderMix = normalizeBorderContrast(borderContrast) ?? DEFAULT_BORDER_CONTRAST;
+	const textBoost = normalizeTextContrast(textContrast) ?? DEFAULT_TEXT_CONTRAST;
 	const dividerMix =
 		borderMix === DEFAULT_BORDER_CONTRAST
 			? DEFAULT_DIVIDER_CONTRAST
@@ -140,6 +167,19 @@ export function applyAppearance(
 	setVar('--app-divider', `color-mix(in oklab, var(--app-fg) ${dividerMix}%, transparent)`);
 	setVar('--app-ui-font', merged.uiFont);
 	setVar('--font-sans', merged.uiFont);
+
+	setVar(
+		'--app-fg-muted',
+		`color-mix(in oklab, var(--app-fg) ${textMix(MUTED_TEXT_MIX, textBoost)}%, var(--app-bg))`
+	);
+	setVar(
+		'--app-fg-subtle',
+		`color-mix(in oklab, var(--app-fg) ${textMix(SUBTLE_TEXT_MIX, textBoost)}%, var(--app-bg))`
+	);
+	setVar('--app-font-weight', `${boldText ? BOLD_TEXT_WEIGHT : DEFAULT_TEXT_WEIGHT}`);
+
+	document.documentElement.classList.toggle('app-text-contrast', textBoost > DEFAULT_TEXT_CONTRAST);
+	document.documentElement.classList.toggle('app-bold-text', boldText);
 
 	setTextScale(textScale ?? 1);
 
