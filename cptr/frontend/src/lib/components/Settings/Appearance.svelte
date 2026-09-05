@@ -29,7 +29,8 @@
 
 	const minTextScale = 1;
 	const maxTextScale = 1.5;
-	const borderContrastStep = 0.5;
+	// Scaled with the range so the -/+ buttons still cross it in ~40 presses.
+	const borderContrastStep = 2.5;
 	const textContrastStep = 5;
 
 	let fileInput: HTMLInputElement;

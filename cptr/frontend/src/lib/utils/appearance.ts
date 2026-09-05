@@ -29,7 +29,11 @@ const DEFAULT_UI_FONT =
 	"'Inter', -apple-system, BlinkMacSystemFont, ui-sans-serif, system-ui, sans-serif";
 export const DEFAULT_BORDER_CONTRAST = 1.5;
 export const DEFAULT_DIVIDER_CONTRAST = 0.875;
-export const MAX_BORDER_CONTRAST = 16;
+/* 16% left the strongest border at 1.28:1 against the background in the light
+   theme -- below the 3:1 WCAG 1.4.11 asks of UI boundaries, and in practice
+   hard to see at all. The ceiling is the full foreground, which crosses 3:1 at
+   61.5% (light) / 41.5% (dark) and reaches a solid rule at the top. */
+export const MAX_BORDER_CONTRAST = 100;
 
 /* Secondary text is drawn by mixing the foreground into the background; these
    are the resting mixes that `--app-fg-muted` / `--app-fg-subtle` use. Text
