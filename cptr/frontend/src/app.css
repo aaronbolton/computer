@@ -34,6 +34,7 @@
 	--app-hover: color-mix(in oklab, var(--app-fg) 6%, transparent);
 	--app-active: color-mix(in oklab, var(--app-fg) 7%, transparent);
 	--app-ui-font: var(--font-sans);
+	--app-font-weight: 400;
 }
 
 @layer base {
@@ -56,6 +57,7 @@
 		background: var(--app-bg);
 		color: var(--app-fg);
 		font-family: var(--app-ui-font);
+		font-weight: var(--app-font-weight, 400);
 	}
 
 	html::-webkit-scrollbar,
@@ -273,6 +275,30 @@
 		[class~='dark:text-gray-700']
 	) {
 	color: var(--app-fg-muted);
+}
+
+/* Readability controls (Settings -> Appearance).
+   Both are opt-in: without the root class the app renders exactly as before.
+
+   Text contrast lifts `--app-fg-muted` / `--app-fg-subtle`, which the remaps
+   above already route every muted `text-gray-*` utility through. Placeholders
+   use `placeholder:text-gray-*`, which those remaps do not match, so lift them
+   here too — otherwise the emptiest text in the app stays the faintest. */
+html.app-text-contrast .app-theme :where(input, textarea)::placeholder {
+	color: var(--app-fg-muted);
+}
+
+/* Bold text raises each weight one step, so emphasis survives the boost. */
+html.app-bold-text .app-theme :where([class~='font-light'], [class~='font-normal']) {
+	font-weight: 500;
+}
+
+html.app-bold-text .app-theme :where([class~='font-medium']) {
+	font-weight: 600;
+}
+
+html.app-bold-text .app-theme :where([class~='font-semibold']) {
+	font-weight: 700;
 }
 
 /* CodeMirror - match Open WebUI */

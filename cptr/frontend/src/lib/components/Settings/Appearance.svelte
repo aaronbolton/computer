@@ -3,8 +3,10 @@
 	import Icon from '../Icon.svelte';
 	import { t } from '$lib/i18n';
 	import {
+		boldText,
 		borderContrast,
 		expandToolDetails,
+		textContrast,
 		textScale,
 		theme,
 		themeConfig,
@@ -14,9 +16,12 @@
 	import type { Theme, ThemeConfig } from '$lib/stores';
 	import {
 		DEFAULT_BORDER_CONTRAST,
+		DEFAULT_TEXT_CONTRAST,
 		MAX_BORDER_CONTRAST,
+		MAX_TEXT_CONTRAST,
 		normalizeBorderContrast,
 		normalizeHexColor,
+		normalizeTextContrast,
 		resolveThemeMode,
 		resolveThemeConfig,
 		sanitizeThemeConfig
@@ -24,19 +29,30 @@
 
 	const minTextScale = 1;
 	const maxTextScale = 1.5;
-	const borderContrastStep = 0.5;
+	// Scaled with the range so the -/+ buttons still cross it in ~40 presses.
+	const borderContrastStep = 2.5;
+	const textContrastStep = 5;
 
 	let fileInput: HTMLInputElement;
 	let scaleEnabled = $state(false);
 	let scaleDraft = $state(1);
 	let borderContrastEnabled = $state(false);
 	let borderContrastDraft = $state(DEFAULT_BORDER_CONTRAST);
+	let textContrastEnabled = $state(false);
+	let textContrastDraft = $state(DEFAULT_TEXT_CONTRAST);
 	let colorDrafts = $state({ background: '', foreground: '' });
 
 	const resolvedTheme = $derived(resolveThemeMode($theme));
 	const resolvedConfig = $derived(resolveThemeConfig($theme, $themeConfig));
 	const hasCustomAppearance = $derived(
-		Boolean($themeConfig || $textScale !== null || $borderContrast !== null || $widescreenMode)
+		Boolean(
+			$themeConfig ||
+			$textScale !== null ||
+			$borderContrast !== null ||
+			$textContrast !== null ||
+			$boldText ||
+			$widescreenMode
+		)
 	);
 
 	$effect(() => {
@@ -55,6 +71,12 @@
 			borderContrastDraft = $borderContrast;
 		} else if (!borderContrastEnabled) {
 			borderContrastDraft = DEFAULT_BORDER_CONTRAST;
+		}
+		if ($textContrast !== null) {
+			textContrastEnabled = true;
+			textContrastDraft = $textContrast;
+		} else if (!textContrastEnabled) {
+			textContrastDraft = DEFAULT_TEXT_CONTRAST;
 		}
 	});
 
@@ -108,6 +130,18 @@
 		}
 	}
 
+	function toggleTextContrast() {
+		if (textContrastEnabled) {
+			textContrastEnabled = false;
+			textContrastDraft = DEFAULT_TEXT_CONTRAST;
+			textContrast.set(null);
+		} else {
+			textContrastEnabled = true;
+			textContrastDraft = $textContrast ?? MAX_TEXT_CONTRAST;
+			textContrast.set(textContrastDraft);
+		}
+	}
+
 	function normalizeTextScale(scale: number | string) {
 		const value = Number(scale);
 		if (!Number.isFinite(value)) return minTextScale;
@@ -135,6 +169,23 @@
 		}
 	}
 
+	function textContrastLabel(contrast: number | null) {
+		if (contrast === null || contrast === DEFAULT_TEXT_CONTRAST) return $t('general.default');
+		return `${contrast}%`;
+	}
+
+	function setTextContrastPreference(contrast: number | string) {
+		const next = normalizeTextContrast(contrast) ?? DEFAULT_TEXT_CONTRAST;
+		textContrastDraft = next;
+		if (next === DEFAULT_TEXT_CONTRAST) {
+			textContrastEnabled = false;
+			textContrast.set(null);
+		} else {
+			textContrastEnabled = true;
+			textContrast.set(next);
+		}
+	}
+
 	function setBorderContrastPreference(contrast: number | string) {
 		const next = normalizeBorderContrast(contrast) ?? DEFAULT_BORDER_CONTRAST;
 		borderContrastDraft = next;
@@ -155,6 +206,10 @@
 		borderContrastEnabled = false;
 		borderContrastDraft = DEFAULT_BORDER_CONTRAST;
 		borderContrast.set(null);
+		textContrastEnabled = false;
+		textContrastDraft = DEFAULT_TEXT_CONTRAST;
+		textContrast.set(null);
+		boldText.set(false);
 		widescreenMode.set(false);
 	}
 
@@ -164,6 +219,8 @@
 			themeConfig: sanitizeThemeConfig($themeConfig),
 			textScale: $textScale,
 			borderContrast: $borderContrast,
+			textContrast: $textContrast,
+			boldText: $boldText,
 			widescreenMode: $widescreenMode
 		};
 
@@ -216,12 +273,16 @@
 			const importedBorderContrast =
 				normalizeBorderContrast(parsed?.borderContrast) ??
 				(parsed?.highContrastBorders === true ? 12 : undefined);
+			const importedTextContrast = normalizeTextContrast(parsed?.textContrast) ?? undefined;
+			const importedBoldText = typeof parsed?.boldText === 'boolean' ? parsed.boldText : undefined;
 
 			if (
 				!importedConfig &&
 				!importedTheme &&
 				importedScale === undefined &&
 				importedBorderContrast === undefined &&
+				importedTextContrast === undefined &&
+				importedBoldText === undefined &&
 				importedWidescreenMode === undefined
 			) {
 				throw new Error('empty theme');
@@ -233,6 +294,11 @@
 				borderContrast.set(
 					importedBorderContrast === DEFAULT_BORDER_CONTRAST ? null : importedBorderContrast
 				);
+			if (importedTextContrast !== undefined)
+				textContrast.set(
+					importedTextContrast === DEFAULT_TEXT_CONTRAST ? null : importedTextContrast
+				);
+			if (importedBoldText !== undefined) boldText.set(importedBoldText);
 			if (importedWidescreenMode !== undefined) widescreenMode.set(importedWidescreenMode);
 			toast.success($t('appearance.imported'));
 		} catch {
@@ -295,6 +361,121 @@
 		</div>
 
 		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2 mt-5">
+			{$t('appearance.readability')}
+		</h3>
+
+		<div class="w-full">
+			<div class="flex items-center gap-2">
+				<span id="text-contrast-label" class="text-xs text-gray-600 dark:text-gray-400">
+					{$t('appearance.textContrast')}
+				</span>
+				<button
+					type="button"
+					class="ml-auto h-6 px-2 rounded-lg text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
+					aria-live="polite"
+					onclick={toggleTextContrast}
+				>
+					{textContrastEnabled ? textContrastLabel(textContrastDraft) : $t('general.default')}
+				</button>
+			</div>
+			<p class="text-[0.6875rem] text-gray-400 dark:text-gray-600 mt-0.5">
+				{$t('appearance.textContrastHint')}
+			</p>
+			{#if textContrastEnabled}
+				<div class="flex items-center gap-1.5 pt-1.5">
+					<button
+						type="button"
+						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
+						aria-label={$t('appearance.decreaseTextContrast')}
+						onclick={() => setTextContrastPreference(textContrastDraft - textContrastStep)}
+					>
+						<Icon name="minus" size={12} />
+					</button>
+					<input
+						id="text-contrast-slider"
+						class="appearance-range flex-1 min-w-0"
+						type="range"
+						min={DEFAULT_TEXT_CONTRAST}
+						max={MAX_TEXT_CONTRAST}
+						step={textContrastStep}
+						bind:value={textContrastDraft}
+						aria-labelledby="text-contrast-label"
+						aria-valuemin={DEFAULT_TEXT_CONTRAST}
+						aria-valuemax={MAX_TEXT_CONTRAST}
+						aria-valuenow={textContrastDraft}
+						aria-valuetext={textContrastLabel(textContrastDraft)}
+						oninput={() => setTextContrastPreference(textContrastDraft)}
+					/>
+					<button
+						type="button"
+						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
+						aria-label={$t('appearance.increaseTextContrast')}
+						onclick={() => setTextContrastPreference(textContrastDraft + textContrastStep)}
+					>
+						<Icon name="plus" size={12} />
+					</button>
+				</div>
+			{/if}
+		</div>
+
+		<label class="flex items-center justify-between gap-3 mt-3">
+			<span class="text-xs text-gray-600 dark:text-gray-400">{$t('appearance.boldText')}</span>
+			<ToggleSwitch value={$boldText} onchange={(value) => boldText.set(value)} />
+		</label>
+
+		<div class="w-full mt-3">
+			<div class="flex items-center gap-2">
+				<span id="ui-scale-label" class="text-xs text-gray-600 dark:text-gray-400">
+					{$t('general.uiScale')}
+				</span>
+				<button
+					type="button"
+					class="ml-auto h-6 px-2 rounded-lg text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
+					aria-live="polite"
+					onclick={toggleTextScale}
+				>
+					{scaleEnabled ? scaleLabel(scaleDraft) : $t('general.default')}
+				</button>
+			</div>
+
+			{#if scaleEnabled}
+				<div class="flex items-center gap-1.5 pt-1.5">
+					<button
+						type="button"
+						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
+						aria-label={$t('general.decreaseUiScale')}
+						onclick={() => setTextScalePreference(scaleDraft - 0.1)}
+					>
+						<Icon name="minus" size={12} />
+					</button>
+					<input
+						id="ui-scale-slider"
+						class="appearance-range flex-1 min-w-0"
+						type="range"
+						min={minTextScale}
+						max={maxTextScale}
+						step="0.01"
+						bind:value={scaleDraft}
+						aria-labelledby="ui-scale-label"
+						aria-valuemin={minTextScale}
+						aria-valuemax={maxTextScale}
+						aria-valuenow={scaleDraft}
+						aria-valuetext={scaleLabel(scaleDraft)}
+						oninput={() => setTextScalePreference(scaleDraft)}
+					/>
+					<button
+						type="button"
+						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
+						aria-label={$t('general.increaseUiScale')}
+						onclick={() => setTextScalePreference(scaleDraft + 0.1)}
+					>
+						<Icon name="plus" size={12} />
+					</button>
+				</div>
+			{/if}
+		</div>
+
+		<h3 class="text-xs text-gray-400 dark:text-gray-600 mb-2 mt-5">
 			{$t('appearance.colors')}
 		</h3>
 		<div class="flex flex-col gap-2.5">
@@ -353,7 +534,6 @@
 					<button
 						type="button"
 						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
-						aria-labelledby="border-contrast-label"
 						aria-label={$t('appearance.decreaseBorderContrast')}
 						onclick={() => setBorderContrastPreference(borderContrastDraft - borderContrastStep)}
 					>
@@ -377,7 +557,6 @@
 					<button
 						type="button"
 						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
-						aria-labelledby="border-contrast-label"
 						aria-label={$t('appearance.increaseBorderContrast')}
 						onclick={() => setBorderContrastPreference(borderContrastDraft + borderContrastStep)}
 					>
@@ -399,60 +578,6 @@
 			>
 			<ToggleSwitch value={$expandToolDetails} onchange={(value) => expandToolDetails.set(value)} />
 		</label>
-
-		<div class="w-full mt-5">
-			<div class="flex items-center gap-2">
-				<span id="ui-scale-label" class="text-xs text-gray-600 dark:text-gray-400">
-					{$t('general.uiScale')}
-				</span>
-				<button
-					type="button"
-					class="ml-auto h-6 px-2 rounded-lg text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
-					aria-live="polite"
-					onclick={toggleTextScale}
-				>
-					{scaleEnabled ? scaleLabel(scaleDraft) : $t('general.default')}
-				</button>
-			</div>
-
-			{#if scaleEnabled}
-				<div class="flex items-center gap-1.5 pt-1.5">
-					<button
-						type="button"
-						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
-						aria-labelledby="ui-scale-label"
-						aria-label={$t('general.decreaseUiScale')}
-						onclick={() => setTextScalePreference(scaleDraft - 0.1)}
-					>
-						<Icon name="minus" size={12} />
-					</button>
-					<input
-						id="ui-scale-slider"
-						class="appearance-range flex-1 min-w-0"
-						type="range"
-						min={minTextScale}
-						max={maxTextScale}
-						step="0.01"
-						bind:value={scaleDraft}
-						aria-labelledby="ui-scale-label"
-						aria-valuemin={minTextScale}
-						aria-valuemax={maxTextScale}
-						aria-valuenow={scaleDraft}
-						aria-valuetext={scaleLabel(scaleDraft)}
-						oninput={() => setTextScalePreference(scaleDraft)}
-					/>
-					<button
-						type="button"
-						class="flex items-center justify-center w-6 h-6 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/6 transition-colors"
-						aria-labelledby="ui-scale-label"
-						aria-label={$t('general.increaseUiScale')}
-						onclick={() => setTextScalePreference(scaleDraft + 0.1)}
-					>
-						<Icon name="plus" size={12} />
-					</button>
-				</div>
-			{/if}
-		</div>
 	</div>
 </div>
 
