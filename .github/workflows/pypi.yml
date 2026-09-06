@@ -1,10 +1,13 @@
 name: Publish to PyPI
 
-# Disabled in this fork: the automatic push trigger is removed so a push to
-# `release` never attempts to publish the upstream `cptr` package to PyPI.
-# Manual dispatch is kept, but the publish job below is additionally gated on
-# the repository owner.
+# In this fork, PyPI publishing is disabled by the repository-owner guard on the
+# `publish` job below — that is the ONLY job which uploads to PyPI. The other
+# jobs (preflight, build, github-release-assets) build the wheel, the Linux
+# wheelhouse and the checksums and attach them to this fork's own GitHub
+# release, so they must keep running on pushes to `release`.
 on:
+  push:
+    branches: [release]
   workflow_dispatch:
 
 concurrency:
