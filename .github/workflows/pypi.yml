@@ -1,8 +1,10 @@
 name: Publish to PyPI
 
+# Disabled in this fork: the automatic push trigger is removed so a push to
+# `release` never attempts to publish the upstream `cptr` package to PyPI.
+# Manual dispatch is kept, but the publish job below is additionally gated on
+# the repository owner.
 on:
-  push:
-    branches: [release]
   workflow_dispatch:
 
 concurrency:
@@ -145,7 +147,8 @@ jobs:
 
   publish:
     needs: [preflight, build]
-    if: github.ref == 'refs/heads/release' && needs.preflight.outputs.publish_needed == 'true'
+    # Fork guard: only the upstream repository may publish to PyPI.
+    if: github.repository_owner == 'open-webui' && github.ref == 'refs/heads/release' && needs.preflight.outputs.publish_needed == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
