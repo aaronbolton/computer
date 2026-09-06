@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Release Assets
 
 # In this fork, PyPI publishing is disabled by the repository-owner guard on the
 # `publish` job below — that is the ONLY job which uploads to PyPI. The other
